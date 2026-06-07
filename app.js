@@ -45,6 +45,8 @@ elements.toggleStocks.addEventListener("click", () => {
 render();
 
 if (location.protocol !== "file:") {
+  elements.generatedAt.textContent = "正在获取最新数据";
+  refreshData(false);
   setInterval(() => refreshData(false), 60_000);
 }
 
@@ -63,7 +65,7 @@ function render() {
   elements.marketTime.textContent = isCloseView
     ? appData.closeSnapshot?.timestamp ?? "--"
     : appData.marketOverview.timestamp;
-  elements.generatedAt.textContent = `更新 ${formatTime(appData.generatedAt)}`;
+  elements.generatedAt.textContent = `获取 ${formatTime(appData.generatedAt)}`;
   if (appData.syncStatus?.cached) {
     elements.generatedAt.textContent = `本地缓存 ${formatTime(appData.generatedAt)}`;
   }
@@ -246,6 +248,7 @@ function formatTime(value) {
   return new Date(value).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   });
 }
 
