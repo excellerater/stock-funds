@@ -68,6 +68,7 @@ function render() {
     elements.generatedAt.textContent = `本地缓存 ${formatTime(appData.generatedAt)}`;
   }
   elements.fundCount.textContent = appData.funds.length;
+  elements.refreshButton.textContent = isStaticHosting() ? "检查更新" : "刷新";
   elements.liveTabLabel.textContent = `${appData.session}估值`;
   elements.viewTabs.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === state.view);
@@ -175,12 +176,11 @@ async function refreshData(manual) {
 
   state.refreshing = true;
   elements.refreshButton.disabled = true;
-  elements.refreshButton.textContent = "同步中";
+  elements.refreshButton.textContent = isStaticHosting() ? "检查中" : "同步中";
 
   try {
-    const staticHosting =
-      location.hostname.endsWith(".github.io") ||
-      location.protocol === "file:";
+    const staticHosting = isStaticHosting();
+    const previousGeneratedAt = appData?.generatedAt;
     const endpoint = staticHosting
       ? `data/remote-funds.json?t=${Date.now()}`
       : manual
@@ -190,13 +190,25 @@ async function refreshData(manual) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     appData = await response.json();
     render();
+    if (manual && staticHosting) {
+      elements.generatedAt.textContent =
+        appData.generatedAt !== previousGeneratedAt
+          ? `已更新 ${formatTime(appData.generatedAt)}`
+          : `当前已是最新 ${formatTime(appData.generatedAt)}`;
+    }
   } catch {
     elements.generatedAt.textContent = "更新失败，保留当前数据";
   } finally {
     state.refreshing = false;
     elements.refreshButton.disabled = false;
-    elements.refreshButton.textContent = "刷新";
+    elements.refreshButton.textContent = isStaticHosting() ? "检查更新" : "刷新";
   }
+}
+
+function isStaticHosting() {
+  return (
+    location.hostname.endsWith(".github.io") || location.protocol === "file:"
+  );
 }
 
 function setImpact(element, value) {
