@@ -181,6 +181,57 @@
           </label>
         </div>
 
+        <section id="profileFields" class="profile-fields" hidden>
+          <div class="avatar-editor">
+            <div id="avatarPreview" class="avatar-preview" aria-hidden="true">
+              <span id="avatarInitial">账</span>
+              <img id="avatarImage" alt="" hidden />
+            </div>
+            <div>
+              <strong>头像</strong>
+              <label class="avatar-upload">
+                更换头像
+                <input
+                  id="avatarFile"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                />
+              </label>
+              <small>JPG、PNG、WebP 或 GIF，不超过 2 MB</small>
+            </div>
+          </div>
+
+          <label>
+            账户名
+            <input
+              id="displayName"
+              type="text"
+              maxlength="30"
+              autocomplete="nickname"
+              placeholder="输入账户名"
+            />
+          </label>
+          <button id="saveProfileButton" class="primary-action" type="button">
+            保存资料
+          </button>
+
+          <div class="account-divider"></div>
+
+          <label>
+            新密码
+            <input
+              id="newPassword"
+              type="password"
+              minlength="6"
+              autocomplete="new-password"
+              placeholder="至少 6 位"
+            />
+          </label>
+          <button id="updatePasswordButton" class="secondary-action" type="button">
+            修改密码
+          </button>
+        </section>
+
         <p id="accountStatus" class="account-status" aria-live="polite"></p>
 
         <div id="accountGuestActions" class="account-actions">
@@ -198,7 +249,7 @@
     </dialog>
 
     <script src="data/remote-funds.js"></script>
-    <script src="account.js?v=20260607-1"></script>
+    <script src="account.js?v=20260607-2"></script>
     <script src="app.js?v=20260607-6"></script>
   </body>
 </html>
