@@ -18,9 +18,15 @@
             <span id="generatedAt">--</span>
           </div>
         </div>
-        <button id="refreshButton" class="refresh-button" type="button">
-          刷新
-        </button>
+        <div class="topbar-actions">
+          <span id="accountMode" class="account-mode">本机保存</span>
+          <button id="accountButton" class="account-button" type="button">
+            登录
+          </button>
+          <button id="refreshButton" class="refresh-button" type="button">
+            刷新
+          </button>
+        </div>
       </header>
 
       <nav class="view-tabs" aria-label="数据视图">
@@ -43,7 +49,7 @@
           <span>今日估算</span>
           <strong id="portfolioDaily">¥0</strong>
         </div>
-        <small>仅保存在当前浏览器</small>
+        <small id="storageNote">仅保存在当前浏览器</small>
       </section>
 
       <section class="workspace">
@@ -130,7 +136,69 @@
       </section>
     </main>
 
+    <dialog id="accountDialog" class="account-dialog">
+      <form id="accountForm" class="account-panel">
+        <div class="account-head">
+          <div>
+            <p>账户</p>
+            <h3 id="accountTitle">登录并同步</h3>
+          </div>
+          <button
+            id="closeAccountDialog"
+            class="dialog-close"
+            type="button"
+            aria-label="关闭"
+          >
+            ×
+          </button>
+        </div>
+
+        <p id="accountDescription" class="account-description">
+          登录后，自选和投入记录会在你的设备之间同步。
+        </p>
+
+        <div id="accountFields" class="account-fields">
+          <label>
+            邮箱
+            <input
+              id="accountEmail"
+              type="email"
+              autocomplete="email"
+              required
+              placeholder="name@example.com"
+            />
+          </label>
+          <label>
+            密码
+            <input
+              id="accountPassword"
+              type="password"
+              autocomplete="current-password"
+              minlength="6"
+              required
+              placeholder="至少 6 位"
+            />
+          </label>
+        </div>
+
+        <p id="accountStatus" class="account-status" aria-live="polite"></p>
+
+        <div id="accountGuestActions" class="account-actions">
+          <button id="signInButton" class="primary-action" type="submit">
+            登录
+          </button>
+          <button id="signUpButton" class="secondary-action" type="button">
+            注册
+          </button>
+        </div>
+        <button id="signOutButton" class="secondary-action full-button" type="button" hidden>
+          退出登录
+        </button>
+      </form>
+    </dialog>
+
     <script src="data/remote-funds.js"></script>
-    <script src="app.js?v=20260607-5"></script>
+    <script src="account.js?v=20260607-1"></script>
+    <script src="app.js?v=20260607-6"></script>
   </body>
 </html>

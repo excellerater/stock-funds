@@ -64,6 +64,7 @@ elements.favoriteButton.addEventListener("click", () => {
     state.favorites.add(id);
   }
   saveLocal("fund-favorites", [...state.favorites]);
+  window.accountSync?.saveFavorites(state.favorites);
   renderFundList();
   renderDetail();
 });
@@ -75,6 +76,7 @@ elements.positionAmount.addEventListener("input", () => {
     delete state.positions[String(state.selectedId)];
   }
   saveLocal("fund-positions", state.positions);
+  window.accountSync?.savePosition(state.selectedId, value);
   renderPortfolio();
   renderPosition();
 });
@@ -91,6 +93,11 @@ elements.toggleStocks.addEventListener("click", () => {
 });
 
 render();
+window.accountSync?.init(({ favorites, positions }) => {
+  state.favorites = new Set(favorites.map(String));
+  state.positions = positions;
+  render();
+});
 
 if (location.protocol !== "file:") {
   elements.generatedAt.textContent = "正在获取最新数据";
