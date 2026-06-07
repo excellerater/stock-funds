@@ -56,26 +56,39 @@ alter table public.user_positions enable row level security;
 alter table public.transactions enable row level security;
 alter table public.daily_portfolio_snapshots enable row level security;
 
+grant select, insert, update, delete
+  on public.profiles, public.user_favorites, public.user_positions, public.transactions
+  to authenticated;
+
+grant select
+  on public.daily_portfolio_snapshots
+  to authenticated;
+
+drop policy if exists "Users manage their profile" on public.profiles;
 create policy "Users manage their profile"
   on public.profiles for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users manage their favorites" on public.user_favorites;
 create policy "Users manage their favorites"
   on public.user_favorites for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users manage their positions" on public.user_positions;
 create policy "Users manage their positions"
   on public.user_positions for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users manage their transactions" on public.transactions;
 create policy "Users manage their transactions"
   on public.transactions for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users read their snapshots" on public.daily_portfolio_snapshots;
 create policy "Users read their snapshots"
   on public.daily_portfolio_snapshots for select
   using (auth.uid() = user_id);
