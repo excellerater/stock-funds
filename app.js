@@ -152,6 +152,9 @@ function renderFundList() {
   elements.fundList.innerHTML = "";
   const funds = getVisibleFunds();
   elements.fundCount.textContent = `${funds.length}/${appData.funds.length}`;
+  elements.favoritesOnly.textContent = state.favoritesOnly
+    ? `显示全部 (${state.favorites.size})`
+    : `我的自选 (${state.favorites.size})`;
 
   funds.forEach((fund) => {
     const impact = state.view === "close" ? fund.closeImpact : fund.impact;
@@ -189,7 +192,7 @@ function renderDetail() {
     : `${appData.session} · ${fund.timestamp}`;
   elements.detailName.textContent = fund.name;
   const favorite = state.favorites.has(String(fund.id));
-  elements.favoriteButton.textContent = favorite ? "★" : "☆";
+  elements.favoriteButton.textContent = favorite ? "★ 已自选" : "☆ 加入自选";
   elements.favoriteButton.classList.toggle("active", favorite);
   elements.favoriteButton.setAttribute(
     "aria-label",

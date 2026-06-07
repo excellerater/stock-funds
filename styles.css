@@ -193,6 +193,7 @@ h2 {
 }
 
 .sidebar {
+  min-width: 0;
   border-right: 1px solid var(--line);
   background: #fafbfb;
 }
@@ -215,6 +216,7 @@ h2 {
 .fund-tools input,
 .fund-tools select,
 .fund-tools button {
+  width: 100%;
   min-width: 0;
   padding: 8px 9px;
   border: 1px solid var(--line);
@@ -295,6 +297,7 @@ h2 {
 }
 
 .detail {
+  min-width: 0;
   padding: 25px 28px 20px;
 }
 
@@ -314,16 +317,20 @@ h2 {
 }
 
 .favorite-button {
-  padding: 4px;
-  border: 0;
-  color: #a7adb7;
-  background: transparent;
-  font-size: 1.55rem;
+  flex-shrink: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--paper);
+  font-size: 0.78rem;
   cursor: pointer;
 }
 
 .favorite-button.active {
   color: #d59b19;
+  border-color: rgba(213, 155, 25, 0.35);
+  background: #fff9e9;
 }
 
 .session-kicker {
@@ -521,6 +528,24 @@ h2 {
 }
 
 @media (max-width: 560px) {
+  .fund-tools {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .fund-tools input {
+    grid-column: 1 / -1;
+  }
+
+  .fund-tools select,
+  .fund-tools button {
+    min-width: 0;
+  }
+
+  .detail-title-row {
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+
   .market-strip {
     grid-template-columns: 1fr;
   }
