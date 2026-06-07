@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>基金估值</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <div>
+          <h1>基金估值</h1>
+          <div class="status-line">
+            <span class="live-dot"></span>
+            <span id="sessionLabel">--</span>
+            <span id="marketTime">--</span>
+            <span id="generatedAt">--</span>
+          </div>
+        </div>
+        <button id="refreshButton" class="refresh-button" type="button">
+          刷新
+        </button>
+      </header>
+
+      <nav class="view-tabs" aria-label="数据视图">
+        <button class="view-tab active" data-view="live" type="button">
+          <span id="liveTabLabel">盘后估值</span>
+        </button>
+        <button class="view-tab" data-view="close" type="button">
+          收盘数据
+        </button>
+      </nav>
+
+      <section class="market-strip" id="marketStrip"></section>
+
+      <section class="workspace">
+        <aside class="sidebar">
+          <div class="sidebar-head">
+            <span>基金</span>
+            <strong id="fundCount">0</strong>
+          </div>
+          <div class="fund-list" id="fundList"></div>
+        </aside>
+
+        <section class="detail">
+          <header class="fund-header">
+            <div>
+              <p class="session-kicker" id="detailSession">--</p>
+              <h2 id="detailName">--</h2>
+            </div>
+            <div class="quote-group">
+              <div>
+                <span id="detailImpactLabel">最新估值</span>
+                <strong id="detailImpact">--</strong>
+              </div>
+            </div>
+          </header>
+
+          <div id="holdingsSection">
+            <div class="holdings-head">
+              <div>
+                <h3>持仓</h3>
+                <span id="holdingCount">0 只</span>
+              </div>
+              <button id="toggleStocks" class="text-button" type="button">
+                展开全部
+              </button>
+            </div>
+
+            <div class="stock-table" id="stockTable"></div>
+          </div>
+
+          <footer class="detail-footer">
+            <span id="delayNote"></span>
+            <span id="description"></span>
+          </footer>
+        </section>
+      </section>
+    </main>
+
+    <script src="data/remote-funds.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
