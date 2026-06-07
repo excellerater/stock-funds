@@ -181,7 +181,9 @@ async function refreshData(manual) {
   try {
     const staticHosting = isStaticHosting();
     const previousGeneratedAt = appData?.generatedAt;
-    const endpoint = staticHosting
+    const endpoint = isVercelHosting()
+      ? `/api/live?t=${Date.now()}`
+      : staticHosting
       ? `data/remote-funds.json?t=${Date.now()}`
       : manual
         ? "/api/refresh"
@@ -190,7 +192,7 @@ async function refreshData(manual) {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     appData = await response.json();
     render();
-    if (manual && staticHosting) {
+    if (manual && staticHosting && !isVercelHosting()) {
       elements.generatedAt.textContent =
         appData.generatedAt !== previousGeneratedAt
           ? `已更新 ${formatTime(appData.generatedAt)}`
@@ -209,6 +211,10 @@ function isStaticHosting() {
   return (
     location.hostname.endsWith(".github.io") || location.protocol === "file:"
   );
+}
+
+function isVercelHosting() {
+  return location.hostname.endsWith(".vercel.app");
 }
 
 function setImpact(element, value) {
