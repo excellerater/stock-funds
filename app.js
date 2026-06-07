@@ -8,12 +8,20 @@ const elements = {
   liveTabLabel: document.getElementById("liveTabLabel"),
   viewTabs: [...document.querySelectorAll(".view-tab")],
   marketStrip: document.getElementById("marketStrip"),
+  portfolioAmount: document.getElementById("portfolioAmount"),
+  portfolioDaily: document.getElementById("portfolioDaily"),
   fundCount: document.getElementById("fundCount"),
+  fundSearch: document.getElementById("fundSearch"),
+  fundSort: document.getElementById("fundSort"),
+  favoritesOnly: document.getElementById("favoritesOnly"),
   fundList: document.getElementById("fundList"),
   detailSession: document.getElementById("detailSession"),
   detailName: document.getElementById("detailName"),
+  favoriteButton: document.getElementById("favoriteButton"),
   detailImpactLabel: document.getElementById("detailImpactLabel"),
   detailImpact: document.getElementById("detailImpact"),
+  positionAmount: document.getElementById("positionAmount"),
+  positionDaily: document.getElementById("positionDaily"),
   holdingsSection: document.getElementById("holdingsSection"),
   holdingCount: document.getElementById("holdingCount"),
   toggleStocks: document.getElementById("toggleStocks"),
@@ -27,9 +35,49 @@ const state = {
   selectedId: appData?.funds?.[0]?.id ?? null,
   expandedStocks: false,
   refreshing: false,
+  search: "",
+  sort: "default",
+  favoritesOnly: false,
+  favorites: loadLocalSet("fund-favorites"),
+  positions: loadLocalObject("fund-positions"),
 };
 
 elements.refreshButton.addEventListener("click", () => refreshData(true));
+elements.fundSearch.addEventListener("input", () => {
+  state.search = elements.fundSearch.value.trim().toLowerCase();
+  renderFundList();
+});
+elements.fundSort.addEventListener("change", () => {
+  state.sort = elements.fundSort.value;
+  renderFundList();
+});
+elements.favoritesOnly.addEventListener("click", () => {
+  state.favoritesOnly = !state.favoritesOnly;
+  elements.favoritesOnly.classList.toggle("active", state.favoritesOnly);
+  renderFundList();
+});
+elements.favoriteButton.addEventListener("click", () => {
+  const id = String(state.selectedId);
+  if (state.favorites.has(id)) {
+    state.favorites.delete(id);
+  } else {
+    state.favorites.add(id);
+  }
+  saveLocal("fund-favorites", [...state.favorites]);
+  renderFundList();
+  renderDetail();
+});
+elements.positionAmount.addEventListener("input", () => {
+  const value = Math.max(0, Number(elements.positionAmount.value) || 0);
+  if (value) {
+    state.positions[String(state.selectedId)] = value;
+  } else {
+    delete state.positions[String(state.selectedId)];
+  }
+  saveLocal("fund-positions", state.positions);
+  renderPortfolio();
+  renderPosition();
+});
 elements.viewTabs.forEach((button) => {
   button.addEventListener("click", () => {
     state.view = button.dataset.view;
@@ -77,6 +125,7 @@ function render() {
   });
 
   renderMarketStrip();
+  renderPortfolio();
   renderFundList();
   renderDetail();
 }
@@ -101,15 +150,17 @@ function renderMarketStrip() {
 
 function renderFundList() {
   elements.fundList.innerHTML = "";
+  const funds = getVisibleFunds();
+  elements.fundCount.textContent = `${funds.length}/${appData.funds.length}`;
 
-  appData.funds.forEach((fund) => {
+  funds.forEach((fund) => {
     const impact = state.view === "close" ? fund.closeImpact : fund.impact;
     const button = document.createElement("button");
     button.type = "button";
     button.className = `fund-row${fund.id === state.selectedId ? " active" : ""}`;
     button.innerHTML = `
       <span>
-        <strong>${escapeHtml(fund.name)}</strong>
+        <strong>${state.favorites.has(String(fund.id)) ? "★ " : ""}${escapeHtml(fund.name)}</strong>
         <small>${state.view === "close" ? "收盘估值" : `${fund.stocks.length} 只持仓`}</small>
       </span>
       <b class="${impactClass(impact)}">${formatPercentOrDash(impact)}</b>
@@ -122,6 +173,10 @@ function renderFundList() {
     });
     elements.fundList.appendChild(button);
   });
+
+  if (!funds.length) {
+    elements.fundList.innerHTML = '<div class="empty-state">没有匹配的基金</div>';
+  }
 }
 
 function renderDetail() {
@@ -133,6 +188,13 @@ function renderDetail() {
     ? `收盘 · ${appData.closeSnapshot?.timestamp ?? "--"}`
     : `${appData.session} · ${fund.timestamp}`;
   elements.detailName.textContent = fund.name;
+  const favorite = state.favorites.has(String(fund.id));
+  elements.favoriteButton.textContent = favorite ? "★" : "☆";
+  elements.favoriteButton.classList.toggle("active", favorite);
+  elements.favoriteButton.setAttribute(
+    "aria-label",
+    favorite ? "移出自选" : "加入自选",
+  );
   elements.detailImpactLabel.textContent = isCloseView ? "收盘估值" : "最新估值";
   setImpact(elements.detailImpact, isCloseView ? fund.closeImpact : fund.impact);
   elements.holdingsSection.hidden = false;
@@ -142,6 +204,7 @@ function renderDetail() {
     : fund.description;
 
   const stocks = isCloseView ? fund.closeStocks ?? [] : fund.stocks;
+  renderPosition();
   elements.holdingCount.textContent = `${stocks.length} 只`;
 
   const visibleStocks = state.expandedStocks
@@ -152,7 +215,7 @@ function renderDetail() {
 
   elements.stockTable.innerHTML = `
     <div class="stock-row stock-head">
-      <span>名称</span><span>占比</span><span>涨跌</span>
+      <span>名称</span><span>占比</span><span>涨跌</span><span>贡献</span>
     </div>
     ${visibleStocks
       .map(
@@ -161,11 +224,60 @@ function renderDetail() {
             <strong>${escapeHtml(stock.name)}</strong>
             <span>${formatWeight(stock.weight)}</span>
             <b class="${impactClass(stock.change)}">${formatPercent(stock.change)}</b>
+            <b class="${impactClass(stockContribution(stock))}">${formatContribution(stock)}</b>
           </div>
         `,
       )
       .join("")}
   `;
+}
+
+function getVisibleFunds() {
+  const impactFor = (fund) =>
+    Number(state.view === "close" ? fund.closeImpact : fund.impact) || 0;
+  const funds = appData.funds.filter((fund) => {
+    const matchesSearch = fund.name.toLowerCase().includes(state.search);
+    const matchesFavorite =
+      !state.favoritesOnly || state.favorites.has(String(fund.id));
+    return matchesSearch && matchesFavorite;
+  });
+
+  return funds.sort((left, right) => {
+    if (state.sort === "impact-desc") return impactFor(right) - impactFor(left);
+    if (state.sort === "impact-asc") return impactFor(left) - impactFor(right);
+    if (state.sort === "name") return left.name.localeCompare(right.name, "zh-CN");
+    return 0;
+  });
+}
+
+function renderPortfolio() {
+  const total = appData.funds.reduce(
+    (sum, fund) => sum + (Number(state.positions[String(fund.id)]) || 0),
+    0,
+  );
+  const daily = appData.funds.reduce((sum, fund) => {
+    const amount = Number(state.positions[String(fund.id)]) || 0;
+    const impact = state.view === "close" ? fund.closeImpact : fund.impact;
+    return sum + (amount * (Number(impact) || 0)) / 100;
+  }, 0);
+
+  elements.portfolioAmount.textContent = formatCurrency(total);
+  elements.portfolioDaily.textContent = formatSignedCurrency(daily);
+  elements.portfolioDaily.className = impactClass(daily);
+}
+
+function renderPosition() {
+  const fund = appData.funds.find((item) => item.id === state.selectedId);
+  if (!fund) return;
+  const amount = Number(state.positions[String(fund.id)]) || 0;
+  const impact = state.view === "close" ? fund.closeImpact : fund.impact;
+  const daily = (amount * (Number(impact) || 0)) / 100;
+
+  if (document.activeElement !== elements.positionAmount) {
+    elements.positionAmount.value = amount || "";
+  }
+  elements.positionDaily.textContent = formatSignedCurrency(daily);
+  elements.positionDaily.className = impactClass(daily);
 }
 
 async function refreshData(manual) {
@@ -244,6 +356,29 @@ function formatWeight(value) {
   return `${Number(value).toFixed(2)}%`;
 }
 
+function stockContribution(stock) {
+  return (Number(stock.weight) * Number(stock.change)) / 100;
+}
+
+function formatContribution(stock) {
+  const value = stockContribution(stock);
+  return `${value > 0 ? "+" : ""}${value.toFixed(3)}%`;
+}
+
+function formatCurrency(value) {
+  return `¥${Number(value).toLocaleString("zh-CN", {
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatSignedCurrency(value) {
+  const number = Number(value);
+  const formatted = Math.abs(number).toLocaleString("zh-CN", {
+    maximumFractionDigits: 2,
+  });
+  return `${number > 0 ? "+" : number < 0 ? "-" : ""}¥${formatted}`;
+}
+
 function formatTime(value) {
   return new Date(value).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
@@ -262,4 +397,34 @@ function escapeHtml(value) {
   const node = document.createElement("span");
   node.textContent = String(value);
   return node.innerHTML;
+}
+
+function loadLocalSet(key) {
+  return new Set(loadLocalArray(key).map(String));
+}
+
+function loadLocalArray(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "[]");
+    return Array.isArray(value) ? value : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadLocalObject(key) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || "{}");
+    return value && typeof value === "object" ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLocal(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Private browsing or storage policies may disable local persistence.
+  }
 }

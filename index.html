@@ -34,11 +34,33 @@
 
       <section class="market-strip" id="marketStrip"></section>
 
+      <section class="portfolio-strip">
+        <div>
+          <span>记录投入</span>
+          <strong id="portfolioAmount">¥0</strong>
+        </div>
+        <div>
+          <span>今日估算</span>
+          <strong id="portfolioDaily">¥0</strong>
+        </div>
+        <small>仅保存在当前浏览器</small>
+      </section>
+
       <section class="workspace">
         <aside class="sidebar">
           <div class="sidebar-head">
             <span>基金</span>
             <strong id="fundCount">0</strong>
+          </div>
+          <div class="fund-tools">
+            <input id="fundSearch" type="search" placeholder="搜索基金" />
+            <select id="fundSort" aria-label="基金排序">
+              <option value="default">默认排序</option>
+              <option value="impact-desc">涨幅优先</option>
+              <option value="impact-asc">跌幅优先</option>
+              <option value="name">名称排序</option>
+            </select>
+            <button id="favoritesOnly" type="button">只看自选</button>
           </div>
           <div class="fund-list" id="fundList"></div>
         </aside>
@@ -47,7 +69,17 @@
           <header class="fund-header">
             <div>
               <p class="session-kicker" id="detailSession">--</p>
-              <h2 id="detailName">--</h2>
+              <div class="detail-title-row">
+                <h2 id="detailName">--</h2>
+                <button
+                  id="favoriteButton"
+                  class="favorite-button"
+                  type="button"
+                  aria-label="加入自选"
+                >
+                  ☆
+                </button>
+              </div>
             </div>
             <div class="quote-group">
               <div>
@@ -56,6 +88,25 @@
               </div>
             </div>
           </header>
+
+          <section class="position-card">
+            <label for="positionAmount">我的投入金额</label>
+            <div>
+              <span>¥</span>
+              <input
+                id="positionAmount"
+                type="number"
+                min="0"
+                step="100"
+                inputmode="decimal"
+                placeholder="0"
+              />
+            </div>
+            <p>
+              今日估算盈亏
+              <strong id="positionDaily">¥0</strong>
+            </p>
+          </section>
 
           <div id="holdingsSection">
             <div class="holdings-head">
@@ -80,6 +131,6 @@
     </main>
 
     <script src="data/remote-funds.js"></script>
-    <script src="app.js?v=20260607-3"></script>
+    <script src="app.js?v=20260607-4"></script>
   </body>
 </html>
