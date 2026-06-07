@@ -248,6 +248,46 @@ h2 {
   display: block;
 }
 
+.editable-metric input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.editable-metric input:focus {
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--accent);
+}
+
+.editable-metric input:disabled {
+  opacity: 1;
+}
+
+.cost-reverse-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--paper);
+  font-size: 0.7rem;
+}
+
+.cost-reverse-bar button {
+  flex-shrink: 0;
+  padding: 6px 9px;
+  font-size: 0.72rem;
+}
+
 .ledger-summary span {
   color: var(--muted);
   font-size: 0.7rem;
@@ -1008,5 +1048,10 @@ h2 {
 
   .nav-editor button {
     grid-column: 1 / -1;
+  }
+
+  .cost-reverse-bar {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

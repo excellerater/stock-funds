@@ -138,10 +138,22 @@
               <div><span>持有金额</span><strong id="ledgerValue">--</strong></div>
               <div><span>持有份额</span><strong id="ledgerShares">0</strong></div>
               <div><span>持仓成本</span><strong id="ledgerUnitCost">--</strong></div>
-              <div><span>持有收益</span><strong id="ledgerPnl">--</strong></div>
-              <div><span>持有收益率</span><strong id="ledgerReturnRate">--</strong></div>
+              <div class="editable-metric">
+                <span>持有收益</span>
+                <input id="ledgerPnlInput" type="number" step="0.01" inputmode="decimal" placeholder="--" aria-label="持有收益" />
+              </div>
+              <div class="editable-metric">
+                <span>持有收益率</span>
+                <input id="ledgerReturnRateInput" type="number" step="0.01" inputmode="decimal" placeholder="--" aria-label="持有收益率" />
+              </div>
               <div><span>当日收益</span><strong id="ledgerDailyPnl">--</strong></div>
               <div><span>已实现盈亏</span><strong id="ledgerRealized">¥0</strong></div>
+            </div>
+            <div class="cost-reverse-bar">
+              <span id="costReverseHint">输入持有收益或收益率，可建立当前成本快照</span>
+              <button id="saveReversedCostButton" class="secondary-action" type="button">
+                保存反推成本
+              </button>
             </div>
             <div class="nav-editor">
               <label>
@@ -345,6 +357,6 @@
 
     <script src="data/remote-funds.js"></script>
     <script src="account.js?v=20260607-2"></script>
-    <script src="app.js?v=20260607-7"></script>
+    <script src="app.js?v=20260607-8"></script>
   </body>
 </html>

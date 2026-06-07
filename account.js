@@ -54,6 +54,7 @@
     addTransaction,
     deleteTransaction,
     saveConfirmedNav,
+    saveCostBasis,
     isCloudEnabled: () => enabled,
     isSignedIn: () => Boolean(user),
   };
@@ -397,6 +398,30 @@
       { onConflict: "user_id,fund_id" },
     );
     return { error: error ? humanizeError(error) : null };
+  }
+
+  async function saveCostBasis(fundId, amount, shares) {
+    if (!client || !user) return { error: "请先登录" };
+    const payload = {
+      user_id: user.id,
+      fund_id: String(fundId),
+      transaction_type: "cost_basis",
+      trade_date: new Date().toISOString().slice(0, 10),
+      amount: Number(amount),
+      shares: Number(shares) || null,
+      nav: null,
+      fee: 0,
+      notes: "根据持有收益反推成本",
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await client
+      .from("transactions")
+      .insert(payload)
+      .select("id,fund_id,transaction_type,trade_date,amount,shares,nav,fee,notes,created_at")
+      .single();
+    return error
+      ? { error: humanizeError(error) }
+      : { data: normalizeTransaction(data) };
   }
 
   function normalizeTransaction(row) {

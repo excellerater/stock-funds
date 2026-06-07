@@ -31,9 +31,11 @@ const elements = {
   ledgerUnitCost: document.getElementById("ledgerUnitCost"),
   ledgerRealized: document.getElementById("ledgerRealized"),
   ledgerValue: document.getElementById("ledgerValue"),
-  ledgerPnl: document.getElementById("ledgerPnl"),
-  ledgerReturnRate: document.getElementById("ledgerReturnRate"),
+  ledgerPnlInput: document.getElementById("ledgerPnlInput"),
+  ledgerReturnRateInput: document.getElementById("ledgerReturnRateInput"),
   ledgerDailyPnl: document.getElementById("ledgerDailyPnl"),
+  costReverseHint: document.getElementById("costReverseHint"),
+  saveReversedCostButton: document.getElementById("saveReversedCostButton"),
   navEstimateNote: document.getElementById("navEstimateNote"),
   confirmedNav: document.getElementById("confirmedNav"),
   confirmedNavDate: document.getElementById("confirmedNavDate"),
@@ -74,6 +76,8 @@ const state = {
   positions: loadLocalObject("fund-positions"),
   navs: {},
   transactions: [],
+  reversedCost: null,
+  reversedFundId: null,
 };
 
 elements.refreshButton.addEventListener("click", () => refreshData(true));
@@ -132,6 +136,13 @@ elements.closeTransactionDialog.addEventListener("click", () =>
 elements.transactionType.addEventListener("change", updateTransactionFields);
 elements.transactionForm.addEventListener("submit", saveTransaction);
 elements.saveNavButton.addEventListener("click", saveConfirmedNav);
+elements.ledgerPnlInput.addEventListener("input", () =>
+  updateReversedCost("pnl"),
+);
+elements.ledgerReturnRateInput.addEventListener("input", () =>
+  updateReversedCost("rate"),
+);
+elements.saveReversedCostButton.addEventListener("click", saveReversedCost);
 
 render();
 window.accountSync?.init(({ favorites, positions, transactions = [], navs = {} }) => {
@@ -356,6 +367,10 @@ function renderPortfolio() {
 
 function renderLedger() {
   const id = String(state.selectedId);
+  if (state.reversedFundId !== id) {
+    state.reversedCost = null;
+    state.reversedFundId = id;
+  }
   const summary = calculateLedger(id, state.transactions);
   const navRecord = state.navs[id];
   const signedIn = window.accountSync?.isSignedIn();
@@ -395,11 +410,22 @@ function renderLedger() {
   elements.ledgerRealized.textContent = formatSignedCurrency(summary.realized);
   elements.ledgerRealized.className = impactClass(summary.realized);
   elements.ledgerValue.textContent = value == null ? "--" : formatCurrency(value);
-  elements.ledgerPnl.textContent =
-    holdingPnl == null ? "--" : formatSignedCurrency(holdingPnl);
-  elements.ledgerPnl.className =
+  if (document.activeElement !== elements.ledgerPnlInput) {
+    elements.ledgerPnlInput.value =
+      holdingPnl == null ? "" : roundForInput(holdingPnl, 2);
+  }
+  if (document.activeElement !== elements.ledgerReturnRateInput) {
+    elements.ledgerReturnRateInput.value =
+      returnRate == null ? "" : roundForInput(returnRate, 2);
+  }
+  elements.ledgerPnlInput.className =
     holdingPnl == null ? "flat" : impactClass(holdingPnl);
-  setMetricPercent(elements.ledgerReturnRate, returnRate);
+  elements.ledgerReturnRateInput.className =
+    returnRate == null ? "flat" : impactClass(returnRate);
+  elements.ledgerPnlInput.disabled = !signedIn || value == null;
+  elements.ledgerReturnRateInput.disabled = !signedIn || value == null;
+  elements.saveReversedCostButton.disabled =
+    !signedIn || value == null || state.reversedCost == null;
   elements.ledgerDailyPnl.textContent =
     dailyPnl == null ? "--" : formatSignedCurrency(dailyPnl);
   elements.ledgerDailyPnl.className =
@@ -492,9 +518,95 @@ function calculateLedger(fundId, transactions) {
       } else if (item.transaction_type === "dividend") {
         realized += item.amount - item.fee;
         netInvested -= item.amount - item.fee;
+      } else if (item.transaction_type === "cost_basis") {
+        shares = item.shares || shares;
+        cost = item.amount;
+        netInvested = item.amount;
       }
     });
   return { shares, cost: Math.max(0, cost), realized, netInvested, count };
+}
+
+function updateReversedCost(source) {
+  const fund = appData.funds.find((item) => item.id === state.selectedId);
+  const summary = calculateLedger(String(state.selectedId), state.transactions);
+  const estimatedNav = fund ? getEstimatedNav(fund) : null;
+  const value =
+    Number.isFinite(estimatedNav) && summary.shares > 0
+      ? summary.shares * estimatedNav
+      : null;
+  if (value == null) return;
+
+  let cost;
+  if (source === "pnl") {
+    if (!elements.ledgerPnlInput.value.trim()) return clearReversedCost();
+    const pnl = Number(elements.ledgerPnlInput.value);
+    if (!Number.isFinite(pnl)) return clearReversedCost();
+    cost = value - pnl;
+  } else {
+    if (!elements.ledgerReturnRateInput.value.trim()) return clearReversedCost();
+    const rate = Number(elements.ledgerReturnRateInput.value);
+    if (!Number.isFinite(rate) || rate <= -100) {
+      elements.costReverseHint.textContent = "收益率必须大于 -100%";
+      return clearReversedCost(false);
+    }
+    cost = value / (1 + rate / 100);
+  }
+
+  if (!(cost > 0)) {
+    elements.costReverseHint.textContent = "反推后的成本必须大于 0";
+    return clearReversedCost(false);
+  }
+
+  const pnl = value - cost;
+  const rate = (pnl / cost) * 100;
+  state.reversedCost = cost;
+  state.reversedFundId = String(state.selectedId);
+  if (source !== "pnl") {
+    elements.ledgerPnlInput.value = roundForInput(pnl, 2);
+  }
+  if (source !== "rate") {
+    elements.ledgerReturnRateInput.value = roundForInput(rate, 2);
+  }
+  elements.costReverseHint.textContent = `将当前持仓成本调整为 ${formatCurrency(cost)}`;
+  elements.saveReversedCostButton.disabled = false;
+}
+
+function clearReversedCost(resetHint = true) {
+  state.reversedCost = null;
+  elements.saveReversedCostButton.disabled = true;
+  if (resetHint) {
+    elements.costReverseHint.textContent =
+      "输入持有收益或收益率，可建立当前成本快照";
+  }
+}
+
+async function saveReversedCost() {
+  if (
+    !(state.reversedCost > 0) ||
+    state.reversedFundId !== String(state.selectedId)
+  ) {
+    return;
+  }
+  const id = String(state.selectedId);
+  const summary = calculateLedger(id, state.transactions);
+  elements.saveReversedCostButton.disabled = true;
+  elements.costReverseHint.textContent = "正在保存成本调整";
+  const result = await window.accountSync.saveCostBasis(
+    id,
+    state.reversedCost,
+    summary.shares,
+  );
+  if (result.error) {
+    elements.costReverseHint.textContent = result.error;
+    elements.saveReversedCostButton.disabled = false;
+    return;
+  }
+  state.transactions.push(result.data);
+  state.reversedCost = null;
+  renderPortfolio();
+  renderLedger();
+  elements.costReverseHint.textContent = "持仓成本已按输入值调整";
 }
 
 function openTransactionDialog() {
@@ -702,7 +814,16 @@ function formatNumber(value, digits = 2) {
 }
 
 function transactionTypeName(type) {
-  return { buy: "买入", sell: "卖出", dividend: "分红" }[type] || type;
+  return {
+    buy: "买入",
+    sell: "卖出",
+    dividend: "分红",
+    cost_basis: "成本调整",
+  }[type] || type;
+}
+
+function roundForInput(value, digits) {
+  return Number(value.toFixed(digits));
 }
 
 function formatSignedCurrency(value) {
