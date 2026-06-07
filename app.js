@@ -25,11 +25,16 @@ const elements = {
   positionAmount: document.getElementById("positionAmount"),
   positionDaily: document.getElementById("positionDaily"),
   ledgerHint: document.getElementById("ledgerHint"),
+  ledgerDailyImpact: document.getElementById("ledgerDailyImpact"),
+  ledgerEstimatedNav: document.getElementById("ledgerEstimatedNav"),
   ledgerShares: document.getElementById("ledgerShares"),
-  ledgerCost: document.getElementById("ledgerCost"),
+  ledgerUnitCost: document.getElementById("ledgerUnitCost"),
   ledgerRealized: document.getElementById("ledgerRealized"),
   ledgerValue: document.getElementById("ledgerValue"),
   ledgerPnl: document.getElementById("ledgerPnl"),
+  ledgerReturnRate: document.getElementById("ledgerReturnRate"),
+  ledgerDailyPnl: document.getElementById("ledgerDailyPnl"),
+  navEstimateNote: document.getElementById("navEstimateNote"),
   confirmedNav: document.getElementById("confirmedNav"),
   confirmedNavDate: document.getElementById("confirmedNavDate"),
   saveNavButton: document.getElementById("saveNavButton"),
@@ -317,18 +322,19 @@ function renderPortfolio() {
     0,
   );
   summaries.forEach((summary, index) => {
-    const nav = state.navs[String(appData.funds[index].id)]?.nav;
-    if (Number.isFinite(nav)) {
-      const value = summary.shares * nav;
+    const fund = appData.funds[index];
+    const estimatedNav = getEstimatedNav(fund);
+    if (Number.isFinite(estimatedNav)) {
+      const value = summary.shares * estimatedNav;
       portfolioValue += value;
       portfolioPnl += value - summary.cost;
     }
   });
   const daily = appData.funds.reduce((sum, fund) => {
     const ledger = calculateLedger(String(fund.id), state.transactions);
-    const nav = state.navs[String(fund.id)]?.nav;
-    const amount = Number.isFinite(nav)
-      ? ledger.shares * nav
+    const estimatedNav = getEstimatedNav(fund);
+    const amount = Number.isFinite(estimatedNav)
+      ? ledger.shares * estimatedNav
       : Number(state.positions[String(fund.id)]) || 0;
     const impact = state.view === "close" ? fund.closeImpact : fund.impact;
     return sum + (amount * (Number(impact) || 0)) / 100;
@@ -353,24 +359,54 @@ function renderLedger() {
   const summary = calculateLedger(id, state.transactions);
   const navRecord = state.navs[id];
   const signedIn = window.accountSync?.isSignedIn();
-  const canValue = summary.shares === 0 ? summary.count > 0 : Boolean(navRecord);
+  const fund = appData.funds.find((item) => String(item.id) === id);
+  const impact = fund
+    ? Number(state.view === "close" ? fund.closeImpact : fund.impact)
+    : null;
+  const estimatedNav = fund ? getEstimatedNav(fund) : null;
+  const canValue =
+    summary.shares === 0 ? summary.count > 0 : Number.isFinite(estimatedNav);
   const value = canValue
     ? summary.shares === 0
       ? 0
-      : summary.shares * navRecord.nav
+      : summary.shares * estimatedNav
     : null;
-  const pnl = value == null ? null : value - summary.cost + summary.realized;
+  const holdingPnl = value == null ? null : value - summary.cost;
+  const returnRate =
+    holdingPnl == null || summary.cost <= 0
+      ? null
+      : (holdingPnl / summary.cost) * 100;
+  const unitCost = summary.shares > 0 ? summary.cost / summary.shares : null;
+  const dailyPnl =
+    navRecord && Number.isFinite(impact)
+      ? summary.shares * navRecord.nav * (impact / 100)
+      : null;
 
   elements.ledgerHint.textContent = signedIn
-    ? `${summary.count} 笔交易${navRecord?.date ? ` · 净值 ${navRecord.date}` : ""}`
+    ? `${summary.count} 笔交易${navRecord?.date ? ` · 基准净值 ${navRecord.date}` : ""}`
     : "登录后记录真实交易";
+  setMetricPercent(elements.ledgerDailyImpact, impact);
+  elements.ledgerEstimatedNav.textContent = Number.isFinite(estimatedNav)
+    ? formatNumber(estimatedNav, 4)
+    : "--";
   elements.ledgerShares.textContent = formatNumber(summary.shares, 4);
-  elements.ledgerCost.textContent = formatCurrency(summary.cost);
+  elements.ledgerUnitCost.textContent =
+    unitCost == null ? "--" : formatNumber(unitCost, 4);
   elements.ledgerRealized.textContent = formatSignedCurrency(summary.realized);
   elements.ledgerRealized.className = impactClass(summary.realized);
   elements.ledgerValue.textContent = value == null ? "--" : formatCurrency(value);
-  elements.ledgerPnl.textContent = pnl == null ? "--" : formatSignedCurrency(pnl);
-  elements.ledgerPnl.className = pnl == null ? "flat" : impactClass(pnl);
+  elements.ledgerPnl.textContent =
+    holdingPnl == null ? "--" : formatSignedCurrency(holdingPnl);
+  elements.ledgerPnl.className =
+    holdingPnl == null ? "flat" : impactClass(holdingPnl);
+  setMetricPercent(elements.ledgerReturnRate, returnRate);
+  elements.ledgerDailyPnl.textContent =
+    dailyPnl == null ? "--" : formatSignedCurrency(dailyPnl);
+  elements.ledgerDailyPnl.className =
+    dailyPnl == null ? "flat" : impactClass(dailyPnl);
+  elements.navEstimateNote.textContent = navRecord
+    ? `估算净值 = ${formatNumber(navRecord.nav, 4)} × (1 ${impact >= 0 ? "+" : "-"} ${formatNumber(Math.abs(impact || 0), 2)}%)。正式净值公布后请更新基准。`
+    : "保存基金最近一次正式净值后，系统会结合当前涨跌自动计算估算净值。";
   elements.confirmedNav.value = navRecord?.nav || "";
   elements.confirmedNavDate.value = navRecord?.date || "";
   elements.confirmedNav.disabled = !signedIn;
@@ -407,6 +443,23 @@ function renderLedger() {
         deleteTransaction(button.dataset.transactionId),
       ),
     );
+}
+
+function getEstimatedNav(fund) {
+  const baseNav = state.navs[String(fund.id)]?.nav;
+  const impact = Number(state.view === "close" ? fund.closeImpact : fund.impact);
+  if (!Number.isFinite(baseNav) || !Number.isFinite(impact)) return null;
+  return baseNav * (1 + impact / 100);
+}
+
+function setMetricPercent(element, value) {
+  if (!Number.isFinite(value)) {
+    element.textContent = "--";
+    element.className = "flat";
+    return;
+  }
+  element.textContent = formatPercent(value);
+  element.className = impactClass(value);
 }
 
 function calculateLedger(fundId, transactions) {
