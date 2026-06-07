@@ -117,6 +117,7 @@ elements.positionAmount.addEventListener("input", () => {
   window.accountSync?.savePosition(state.selectedId, value);
   renderPortfolio();
   renderPosition();
+  renderLedger();
 });
 elements.viewTabs.forEach((button) => {
   button.addEventListener("click", () => {
@@ -379,14 +380,17 @@ function renderLedger() {
     ? Number(state.view === "close" ? fund.closeImpact : fund.impact)
     : null;
   const estimatedNav = fund ? getEstimatedNav(fund) : null;
+  const referenceValue = Number(state.positions[id]) || 0;
   const canValue =
-    summary.shares === 0 ? summary.count > 0 : Number.isFinite(estimatedNav);
+    referenceValue > 0 ||
+    (summary.shares === 0 ? summary.count > 0 : Number.isFinite(estimatedNav));
   const value = canValue
-    ? summary.shares === 0
-      ? 0
-      : summary.shares * estimatedNav
+    ? summary.shares > 0 && Number.isFinite(estimatedNav)
+      ? summary.shares * estimatedNav
+      : referenceValue
     : null;
-  const holdingPnl = value == null ? null : value - summary.cost;
+  const holdingPnl =
+    value == null || summary.cost <= 0 ? null : value - summary.cost;
   const returnRate =
     holdingPnl == null || summary.cost <= 0
       ? null
@@ -422,10 +426,10 @@ function renderLedger() {
     holdingPnl == null ? "flat" : impactClass(holdingPnl);
   elements.ledgerReturnRateInput.className =
     returnRate == null ? "flat" : impactClass(returnRate);
-  elements.ledgerPnlInput.disabled = !signedIn || value == null;
-  elements.ledgerReturnRateInput.disabled = !signedIn || value == null;
+  elements.ledgerPnlInput.disabled = !signedIn;
+  elements.ledgerReturnRateInput.disabled = !signedIn;
   elements.saveReversedCostButton.disabled =
-    !signedIn || value == null || state.reversedCost == null;
+    !signedIn || state.reversedCost == null;
   elements.ledgerDailyPnl.textContent =
     dailyPnl == null ? "--" : formatSignedCurrency(dailyPnl);
   elements.ledgerDailyPnl.className =
@@ -531,11 +535,19 @@ function updateReversedCost(source) {
   const fund = appData.funds.find((item) => item.id === state.selectedId);
   const summary = calculateLedger(String(state.selectedId), state.transactions);
   const estimatedNav = fund ? getEstimatedNav(fund) : null;
+  const referenceValue =
+    Number(state.positions[String(state.selectedId)]) || 0;
   const value =
     Number.isFinite(estimatedNav) && summary.shares > 0
       ? summary.shares * estimatedNav
-      : null;
-  if (value == null) return;
+      : referenceValue > 0
+        ? referenceValue
+        : null;
+  if (value == null) {
+    elements.costReverseHint.textContent =
+      "请先填写上方“估值参考金额”作为当前持有金额";
+    return clearReversedCost(false);
+  }
 
   let cost;
   if (source === "pnl") {
@@ -590,12 +602,26 @@ async function saveReversedCost() {
   }
   const id = String(state.selectedId);
   const summary = calculateLedger(id, state.transactions);
+  const fund = appData.funds.find((item) => item.id === state.selectedId);
+  const estimatedNav = fund ? getEstimatedNav(fund) : null;
+  const referenceValue = Number(state.positions[id]) || 0;
+  const snapshotShares =
+    summary.shares > 0
+      ? summary.shares
+      : Number.isFinite(estimatedNav) && referenceValue > 0
+        ? referenceValue / estimatedNav
+        : 0;
+  if (!(snapshotShares > 0)) {
+    elements.costReverseHint.textContent =
+      "请先保存上次确认净值，系统才能根据持有金额反推份额";
+    return;
+  }
   elements.saveReversedCostButton.disabled = true;
   elements.costReverseHint.textContent = "正在保存成本调整";
   const result = await window.accountSync.saveCostBasis(
     id,
     state.reversedCost,
-    summary.shares,
+    snapshotShares,
   );
   if (result.error) {
     elements.costReverseHint.textContent = result.error;
