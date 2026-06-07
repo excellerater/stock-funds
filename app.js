@@ -9,6 +9,8 @@ const elements = {
   viewTabs: [...document.querySelectorAll(".view-tab")],
   marketStrip: document.getElementById("marketStrip"),
   portfolioAmount: document.getElementById("portfolioAmount"),
+  portfolioValue: document.getElementById("portfolioValue"),
+  portfolioPnl: document.getElementById("portfolioPnl"),
   portfolioDaily: document.getElementById("portfolioDaily"),
   fundCount: document.getElementById("fundCount"),
   fundSearch: document.getElementById("fundSearch"),
@@ -22,6 +24,31 @@ const elements = {
   detailImpact: document.getElementById("detailImpact"),
   positionAmount: document.getElementById("positionAmount"),
   positionDaily: document.getElementById("positionDaily"),
+  ledgerHint: document.getElementById("ledgerHint"),
+  ledgerShares: document.getElementById("ledgerShares"),
+  ledgerCost: document.getElementById("ledgerCost"),
+  ledgerRealized: document.getElementById("ledgerRealized"),
+  ledgerValue: document.getElementById("ledgerValue"),
+  ledgerPnl: document.getElementById("ledgerPnl"),
+  confirmedNav: document.getElementById("confirmedNav"),
+  confirmedNavDate: document.getElementById("confirmedNavDate"),
+  saveNavButton: document.getElementById("saveNavButton"),
+  addTransactionButton: document.getElementById("addTransactionButton"),
+  transactionList: document.getElementById("transactionList"),
+  transactionDialog: document.getElementById("transactionDialog"),
+  transactionForm: document.getElementById("transactionForm"),
+  transactionFundName: document.getElementById("transactionFundName"),
+  transactionType: document.getElementById("transactionType"),
+  transactionDate: document.getElementById("transactionDate"),
+  transactionAmount: document.getElementById("transactionAmount"),
+  transactionShares: document.getElementById("transactionShares"),
+  transactionSharesField: document.getElementById("transactionSharesField"),
+  transactionNav: document.getElementById("transactionNav"),
+  transactionNavField: document.getElementById("transactionNavField"),
+  transactionFee: document.getElementById("transactionFee"),
+  transactionNotes: document.getElementById("transactionNotes"),
+  transactionStatus: document.getElementById("transactionStatus"),
+  closeTransactionDialog: document.getElementById("closeTransactionDialog"),
   holdingsSection: document.getElementById("holdingsSection"),
   holdingCount: document.getElementById("holdingCount"),
   toggleStocks: document.getElementById("toggleStocks"),
@@ -40,6 +67,8 @@ const state = {
   favoritesOnly: false,
   favorites: loadLocalSet("fund-favorites"),
   positions: loadLocalObject("fund-positions"),
+  navs: {},
+  transactions: [],
 };
 
 elements.refreshButton.addEventListener("click", () => refreshData(true));
@@ -91,11 +120,20 @@ elements.toggleStocks.addEventListener("click", () => {
   state.expandedStocks = !state.expandedStocks;
   renderDetail();
 });
+elements.addTransactionButton.addEventListener("click", openTransactionDialog);
+elements.closeTransactionDialog.addEventListener("click", () =>
+  elements.transactionDialog.close(),
+);
+elements.transactionType.addEventListener("change", updateTransactionFields);
+elements.transactionForm.addEventListener("submit", saveTransaction);
+elements.saveNavButton.addEventListener("click", saveConfirmedNav);
 
 render();
-window.accountSync?.init(({ favorites, positions }) => {
+window.accountSync?.init(({ favorites, positions, transactions = [], navs = {} }) => {
   state.favorites = new Set(favorites.map(String));
   state.positions = positions;
+  state.transactions = transactions;
+  state.navs = navs;
   render();
 });
 
@@ -215,6 +253,7 @@ function renderDetail() {
 
   const stocks = isCloseView ? fund.closeStocks ?? [] : fund.stocks;
   renderPosition();
+  renderLedger();
   elements.holdingCount.textContent = `${stocks.length} 只`;
 
   const visibleStocks = state.expandedStocks
@@ -261,19 +300,241 @@ function getVisibleFunds() {
 }
 
 function renderPortfolio() {
-  const total = appData.funds.reduce(
-    (sum, fund) => sum + (Number(state.positions[String(fund.id)]) || 0),
+  const summaries = appData.funds.map((fund) =>
+    calculateLedger(String(fund.id), state.transactions),
+  );
+  const total = summaries.reduce((sum, summary) => sum + summary.netInvested, 0);
+  const hasLedger = summaries.some((summary) => summary.count > 0);
+  const hasCompleteValue =
+    hasLedger &&
+    summaries.every((summary, index) => {
+      if (summary.shares <= 0) return true;
+      return Number.isFinite(state.navs[String(appData.funds[index].id)]?.nav);
+    });
+  let portfolioValue = 0;
+  let portfolioPnl = summaries.reduce(
+    (sum, summary) => sum + summary.realized,
     0,
   );
+  summaries.forEach((summary, index) => {
+    const nav = state.navs[String(appData.funds[index].id)]?.nav;
+    if (Number.isFinite(nav)) {
+      const value = summary.shares * nav;
+      portfolioValue += value;
+      portfolioPnl += value - summary.cost;
+    }
+  });
   const daily = appData.funds.reduce((sum, fund) => {
-    const amount = Number(state.positions[String(fund.id)]) || 0;
+    const ledger = calculateLedger(String(fund.id), state.transactions);
+    const nav = state.navs[String(fund.id)]?.nav;
+    const amount = Number.isFinite(nav)
+      ? ledger.shares * nav
+      : Number(state.positions[String(fund.id)]) || 0;
     const impact = state.view === "close" ? fund.closeImpact : fund.impact;
     return sum + (amount * (Number(impact) || 0)) / 100;
   }, 0);
 
   elements.portfolioAmount.textContent = formatCurrency(total);
+  elements.portfolioValue.textContent = hasCompleteValue
+    ? formatCurrency(portfolioValue)
+    : "--";
+  elements.portfolioPnl.textContent = hasCompleteValue
+    ? formatSignedCurrency(portfolioPnl)
+    : "--";
+  elements.portfolioPnl.className = hasCompleteValue
+    ? impactClass(portfolioPnl)
+    : "flat";
   elements.portfolioDaily.textContent = formatSignedCurrency(daily);
   elements.portfolioDaily.className = impactClass(daily);
+}
+
+function renderLedger() {
+  const id = String(state.selectedId);
+  const summary = calculateLedger(id, state.transactions);
+  const navRecord = state.navs[id];
+  const signedIn = window.accountSync?.isSignedIn();
+  const canValue = summary.shares === 0 ? summary.count > 0 : Boolean(navRecord);
+  const value = canValue
+    ? summary.shares === 0
+      ? 0
+      : summary.shares * navRecord.nav
+    : null;
+  const pnl = value == null ? null : value - summary.cost + summary.realized;
+
+  elements.ledgerHint.textContent = signedIn
+    ? `${summary.count} 笔交易${navRecord?.date ? ` · 净值 ${navRecord.date}` : ""}`
+    : "登录后记录真实交易";
+  elements.ledgerShares.textContent = formatNumber(summary.shares, 4);
+  elements.ledgerCost.textContent = formatCurrency(summary.cost);
+  elements.ledgerRealized.textContent = formatSignedCurrency(summary.realized);
+  elements.ledgerRealized.className = impactClass(summary.realized);
+  elements.ledgerValue.textContent = value == null ? "--" : formatCurrency(value);
+  elements.ledgerPnl.textContent = pnl == null ? "--" : formatSignedCurrency(pnl);
+  elements.ledgerPnl.className = pnl == null ? "flat" : impactClass(pnl);
+  elements.confirmedNav.value = navRecord?.nav || "";
+  elements.confirmedNavDate.value = navRecord?.date || "";
+  elements.confirmedNav.disabled = !signedIn;
+  elements.confirmedNavDate.disabled = !signedIn;
+  elements.saveNavButton.disabled = !signedIn;
+
+  const transactions = state.transactions
+    .filter((item) => item.fund_id === id)
+    .slice()
+    .sort((a, b) => b.trade_date.localeCompare(a.trade_date));
+  elements.transactionList.innerHTML = transactions.length
+    ? transactions
+        .map(
+          (item) => `
+            <div class="transaction-row">
+              <div>
+                <strong>${transactionTypeName(item.transaction_type)}</strong>
+                <span>${item.trade_date}${item.notes ? ` · ${escapeHtml(item.notes)}` : ""}</span>
+              </div>
+              <div>
+                <strong>${formatCurrency(item.amount)}</strong>
+                <span>${item.shares ? `${formatNumber(item.shares, 4)} 份` : ""}</span>
+              </div>
+              <button type="button" data-transaction-id="${item.id}" aria-label="删除交易">删除</button>
+            </div>
+          `,
+        )
+        .join("")
+    : '<div class="empty-ledger">还没有交易记录</div>';
+  elements.transactionList
+    .querySelectorAll("[data-transaction-id]")
+    .forEach((button) =>
+      button.addEventListener("click", () =>
+        deleteTransaction(button.dataset.transactionId),
+      ),
+    );
+}
+
+function calculateLedger(fundId, transactions) {
+  let shares = 0;
+  let cost = 0;
+  let realized = 0;
+  let netInvested = 0;
+  let count = 0;
+  transactions
+    .filter((item) => item.fund_id === fundId)
+    .slice()
+    .sort((a, b) =>
+      `${a.trade_date}${a.created_at || ""}`.localeCompare(
+        `${b.trade_date}${b.created_at || ""}`,
+      ),
+    )
+    .forEach((item) => {
+      count += 1;
+      if (item.transaction_type === "buy") {
+        shares += item.shares || 0;
+        cost += item.amount + item.fee;
+        netInvested += item.amount + item.fee;
+      } else if (item.transaction_type === "sell") {
+        const soldShares = Math.min(item.shares || 0, shares);
+        const removedCost = shares > 0 ? (cost / shares) * soldShares : 0;
+        shares -= soldShares;
+        cost -= removedCost;
+        realized += item.amount - item.fee - removedCost;
+        netInvested -= item.amount - item.fee;
+      } else if (item.transaction_type === "dividend") {
+        realized += item.amount - item.fee;
+        netInvested -= item.amount - item.fee;
+      }
+    });
+  return { shares, cost: Math.max(0, cost), realized, netInvested, count };
+}
+
+function openTransactionDialog() {
+  if (!window.accountSync?.isSignedIn()) {
+    document.getElementById("accountButton").click();
+    return;
+  }
+  const fund = appData.funds.find((item) => item.id === state.selectedId);
+  elements.transactionFundName.textContent = fund?.name || "";
+  elements.transactionForm.reset();
+  elements.transactionType.value = "buy";
+  elements.transactionDate.value = new Date().toISOString().slice(0, 10);
+  elements.transactionFee.value = "0";
+  elements.transactionStatus.textContent = "";
+  updateTransactionFields();
+  elements.transactionDialog.showModal();
+}
+
+function updateTransactionFields() {
+  const dividend = elements.transactionType.value === "dividend";
+  elements.transactionSharesField.hidden = dividend;
+  elements.transactionNavField.hidden = dividend;
+  elements.transactionShares.required = !dividend;
+}
+
+async function saveTransaction(event) {
+  event.preventDefault();
+  const type = elements.transactionType.value;
+  const amount = Number(elements.transactionAmount.value);
+  const shares = Number(elements.transactionShares.value);
+  if (!(amount > 0) || (type !== "dividend" && !(shares > 0))) {
+    elements.transactionStatus.textContent = "请填写有效的金额和份额";
+    return;
+  }
+  if (
+    type === "sell" &&
+    shares > calculateLedger(String(state.selectedId), state.transactions).shares
+  ) {
+    elements.transactionStatus.textContent = "卖出份额不能超过当前持有份额";
+    return;
+  }
+  elements.transactionStatus.textContent = "正在保存";
+  const result = await window.accountSync.addTransaction({
+    fund_id: String(state.selectedId),
+    transaction_type: type,
+    trade_date: elements.transactionDate.value,
+    amount,
+    shares: type === "dividend" ? null : shares,
+    nav:
+      type === "dividend"
+        ? null
+        : Number(elements.transactionNav.value) || amount / shares,
+    fee: Number(elements.transactionFee.value) || 0,
+    notes: elements.transactionNotes.value.trim() || null,
+  });
+  if (result.error) {
+    elements.transactionStatus.textContent = result.error;
+    return;
+  }
+  state.transactions.push(result.data);
+  elements.transactionDialog.close();
+  renderPortfolio();
+  renderLedger();
+}
+
+async function deleteTransaction(id) {
+  if (!window.confirm("确定删除这笔交易吗？删除后收益会重新计算。")) {
+    return;
+  }
+  const result = await window.accountSync.deleteTransaction(id);
+  if (result.error) return;
+  state.transactions = state.transactions.filter((item) => item.id !== id);
+  renderPortfolio();
+  renderLedger();
+}
+
+async function saveConfirmedNav() {
+  const nav = Number(elements.confirmedNav.value);
+  if (!(nav > 0) || !window.accountSync?.isSignedIn()) return;
+  elements.saveNavButton.disabled = true;
+  const result = await window.accountSync.saveConfirmedNav(
+    state.selectedId,
+    nav,
+    elements.confirmedNavDate.value,
+  );
+  elements.saveNavButton.disabled = false;
+  if (result.error) return;
+  state.navs[String(state.selectedId)] = {
+    nav,
+    date: elements.confirmedNavDate.value || null,
+  };
+  renderPortfolio();
+  renderLedger();
 }
 
 function renderPosition() {
@@ -379,6 +640,16 @@ function formatCurrency(value) {
   return `¥${Number(value).toLocaleString("zh-CN", {
     maximumFractionDigits: 2,
   })}`;
+}
+
+function formatNumber(value, digits = 2) {
+  return Number(value).toLocaleString("zh-CN", {
+    maximumFractionDigits: digits,
+  });
+}
+
+function transactionTypeName(type) {
+  return { buy: "买入", sell: "卖出", dividend: "分红" }[type] || type;
 }
 
 function formatSignedCurrency(value) {

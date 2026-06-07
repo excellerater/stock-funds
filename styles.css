@@ -182,7 +182,7 @@ h2 {
 
 .portfolio-strip {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: repeat(4, 1fr) auto;
   align-items: center;
   gap: 24px;
   margin-bottom: 14px;
@@ -190,6 +190,165 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--paper);
+}
+
+.ledger-card {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: #fbfcfc;
+}
+
+.ledger-head,
+.ledger-summary,
+.nav-editor,
+.transaction-row {
+  display: flex;
+  align-items: center;
+}
+
+.ledger-head {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ledger-head h3 {
+  font-size: 1rem;
+}
+
+.ledger-head span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.compact-action {
+  padding: 7px 11px;
+  font-size: 0.78rem;
+}
+
+.ledger-summary {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.ledger-summary div {
+  padding: 10px;
+  border-radius: 9px;
+  background: var(--paper);
+}
+
+.ledger-summary span,
+.ledger-summary strong {
+  display: block;
+}
+
+.ledger-summary span {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.ledger-summary strong {
+  margin-top: 4px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.nav-editor {
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.nav-editor label {
+  display: grid;
+  flex: 1;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.nav-editor input,
+.transaction-fields input,
+.transaction-fields select {
+  width: 100%;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.nav-editor button {
+  align-self: end;
+  padding: 8px 11px;
+}
+
+.transaction-list {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.transaction-row {
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.78rem;
+}
+
+.transaction-row > div:first-child {
+  flex: 1;
+}
+
+.transaction-row > div:nth-child(2) {
+  text-align: right;
+}
+
+.transaction-row strong,
+.transaction-row span {
+  display: block;
+}
+
+.transaction-row span {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.transaction-row button {
+  border: 0;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.empty-ledger {
+  padding: 14px 2px 2px;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.transaction-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.transaction-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.transaction-fields .wide-field {
+  grid-column: 1 / -1;
 }
 
 .portfolio-strip span,
@@ -754,6 +913,10 @@ h2 {
     grid-column: 1 / -1;
     text-align: left;
   }
+
+  .ledger-summary {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 @media (max-width: 560px) {
@@ -823,6 +986,19 @@ h2 {
   }
 
   .portfolio-strip small {
+    grid-column: 1 / -1;
+  }
+
+  .ledger-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .nav-editor {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .nav-editor button {
     grid-column: 1 / -1;
   }
 }

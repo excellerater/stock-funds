@@ -42,8 +42,16 @@
 
       <section class="portfolio-strip">
         <div>
-          <span>记录投入</span>
+          <span>账本净投入</span>
           <strong id="portfolioAmount">¥0</strong>
+        </div>
+        <div>
+          <span>当前市值</span>
+          <strong id="portfolioValue">--</strong>
+        </div>
+        <div>
+          <span>累计盈亏</span>
+          <strong id="portfolioPnl">--</strong>
         </div>
         <div>
           <span>今日估算</span>
@@ -96,7 +104,7 @@
           </header>
 
           <section class="position-card">
-            <label for="positionAmount">我的投入金额</label>
+            <label for="positionAmount">估值参考金额</label>
             <div>
               <span>¥</span>
               <input
@@ -112,6 +120,37 @@
               今日估算盈亏
               <strong id="positionDaily">¥0</strong>
             </p>
+          </section>
+
+          <section class="ledger-card">
+            <div class="ledger-head">
+              <div>
+                <h3>投资账本</h3>
+                <span id="ledgerHint">登录后记录真实交易</span>
+              </div>
+              <button id="addTransactionButton" class="primary-action compact-action" type="button">
+                记一笔
+              </button>
+            </div>
+            <div class="ledger-summary">
+              <div><span>持有份额</span><strong id="ledgerShares">0</strong></div>
+              <div><span>持仓成本</span><strong id="ledgerCost">¥0</strong></div>
+              <div><span>已实现盈亏</span><strong id="ledgerRealized">¥0</strong></div>
+              <div><span>当前市值</span><strong id="ledgerValue">--</strong></div>
+              <div><span>累计盈亏</span><strong id="ledgerPnl">--</strong></div>
+            </div>
+            <div class="nav-editor">
+              <label>
+                最新确认净值
+                <input id="confirmedNav" type="number" min="0" step="0.0001" inputmode="decimal" placeholder="例如 1.2536" />
+              </label>
+              <label>
+                净值日期
+                <input id="confirmedNavDate" type="date" />
+              </label>
+              <button id="saveNavButton" class="secondary-action" type="button">保存净值</button>
+            </div>
+            <div id="transactionList" class="transaction-list"></div>
           </section>
 
           <div id="holdingsSection">
@@ -248,8 +287,57 @@
       </form>
     </dialog>
 
+    <dialog id="transactionDialog" class="account-dialog transaction-dialog">
+      <form id="transactionForm" class="account-panel">
+        <div class="account-head">
+          <div>
+            <p>投资账本</p>
+            <h3 id="transactionTitle">记录交易</h3>
+          </div>
+          <button id="closeTransactionDialog" class="dialog-close" type="button" aria-label="关闭交易窗口">×</button>
+        </div>
+        <p id="transactionFundName" class="account-description"></p>
+        <div class="transaction-fields">
+          <label>
+            类型
+            <select id="transactionType">
+              <option value="buy">买入</option>
+              <option value="sell">卖出</option>
+              <option value="dividend">分红</option>
+            </select>
+          </label>
+          <label>
+            日期
+            <input id="transactionDate" type="date" required />
+          </label>
+          <label>
+            金额
+            <input id="transactionAmount" type="number" min="0" step="0.01" inputmode="decimal" required />
+          </label>
+          <label id="transactionSharesField">
+            份额
+            <input id="transactionShares" type="number" min="0" step="0.0001" inputmode="decimal" />
+          </label>
+          <label id="transactionNavField">
+            成交净值
+            <input id="transactionNav" type="number" min="0" step="0.0001" inputmode="decimal" />
+          </label>
+          <label>
+            手续费
+            <input id="transactionFee" type="number" min="0" step="0.01" inputmode="decimal" value="0" />
+          </label>
+          <label class="wide-field">
+            备注
+            <input id="transactionNotes" type="text" maxlength="100" placeholder="可选" />
+          </label>
+        </div>
+        <p id="transactionStatus" class="account-status" aria-live="polite"></p>
+        <button class="primary-action full-button" type="submit">保存交易</button>
+      </form>
+    </dialog>
+
     <script src="data/remote-funds.js"></script>
     <script src="account.js?v=20260607-2"></script>
-    <script src="app.js?v=20260607-6"></script>
+    <script src="app.js?v=20260607-7"></script>
   </body>
 </html>

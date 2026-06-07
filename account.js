@@ -51,6 +51,9 @@
     init,
     saveFavorites,
     savePosition,
+    addTransaction,
+    deleteTransaction,
+    saveConfirmedNav,
     isCloudEnabled: () => enabled,
     isSignedIn: () => Boolean(user),
   };
@@ -311,12 +314,19 @@
         .upsert(positionRows, { onConflict: "user_id,fund_id" });
     }
 
-    const [favoritesResult, positionsResult] = await Promise.all([
+    const [favoritesResult, positionsResult, transactionsResult] = await Promise.all([
       client.from("user_favorites").select("fund_id"),
-      client.from("user_positions").select("fund_id,invested_amount"),
+      client
+        .from("user_positions")
+        .select("fund_id,invested_amount,confirmed_nav,confirmed_nav_date"),
+      client
+        .from("transactions")
+        .select("id,fund_id,transaction_type,trade_date,amount,shares,nav,fee,notes,created_at")
+        .order("trade_date", { ascending: true })
+        .order("created_at", { ascending: true }),
     ]);
 
-    if (favoritesResult.error || positionsResult.error) {
+    if (favoritesResult.error || positionsResult.error || transactionsResult.error) {
       elements.storageNote.textContent = "云端读取失败，继续使用本机数据";
       return;
     }
@@ -328,9 +338,76 @@
         Number(row.invested_amount),
       ]),
     );
+    const navs = Object.fromEntries(
+      positionsResult.data
+        .filter((row) => row.confirmed_nav != null)
+        .map((row) => [
+          String(row.fund_id),
+          {
+            nav: Number(row.confirmed_nav),
+            date: row.confirmed_nav_date,
+          },
+        ]),
+    );
     writeLocal(FAVORITES_KEY, favorites);
     writeLocal(POSITIONS_KEY, positions);
-    onCloudData({ favorites, positions });
+    onCloudData({
+      favorites,
+      positions,
+      navs,
+      transactions: transactionsResult.data.map(normalizeTransaction),
+    });
+  }
+
+  async function addTransaction(transaction) {
+    if (!client || !user) return { error: "请先登录" };
+    const { data, error } = await client
+      .from("transactions")
+      .insert({ ...transaction, user_id: user.id })
+      .select("id,fund_id,transaction_type,trade_date,amount,shares,nav,fee,notes,created_at")
+      .single();
+    return error
+      ? { error: humanizeError(error) }
+      : { data: normalizeTransaction(data) };
+  }
+
+  async function deleteTransaction(id) {
+    if (!client || !user) return { error: "请先登录" };
+    const { error } = await client.from("transactions").delete().eq("id", id);
+    return { error: error ? humanizeError(error) : null };
+  }
+
+  async function saveConfirmedNav(fundId, nav, date) {
+    if (!client || !user) return { error: "请先登录" };
+    const key = String(fundId);
+    const { data: existing } = await client
+      .from("user_positions")
+      .select("invested_amount")
+      .eq("fund_id", key)
+      .maybeSingle();
+    const { error } = await client.from("user_positions").upsert(
+      {
+        user_id: user.id,
+        fund_id: key,
+        invested_amount: Number(existing?.invested_amount) || 0,
+        confirmed_nav: Number(nav),
+        confirmed_nav_date: date || null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,fund_id" },
+    );
+    return { error: error ? humanizeError(error) : null };
+  }
+
+  function normalizeTransaction(row) {
+    return {
+      ...row,
+      fund_id: String(row.fund_id),
+      amount: Number(row.amount) || 0,
+      shares: row.shares == null ? null : Number(row.shares),
+      nav: row.nav == null ? null : Number(row.nav),
+      fee: Number(row.fee) || 0,
+    };
   }
 
   async function saveFavorites(favorites) {
