@@ -177,7 +177,8 @@ function render() {
     : appData.marketOverview.timestamp;
   elements.generatedAt.textContent = `获取 ${formatTime(appData.generatedAt)}`;
   if (appData.syncStatus?.cached) {
-    elements.generatedAt.textContent = `本地缓存 ${formatTime(appData.generatedAt)}`;
+    elements.generatedAt.textContent =
+      `实时源更新失败，显示缓存 ${formatTime(appData.generatedAt)}`;
   }
   elements.fundCount.textContent = appData.funds.length;
   elements.refreshButton.textContent = isStaticHosting() ? "检查更新" : "刷新";

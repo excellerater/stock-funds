@@ -117,49 +117,153 @@ async function fetchCurrentBundle() {
 }
 
 function extractWasmBase64(siteBundle, bundleDecoder) {
-  const start = siteBundle.indexOf("const Pl=");
-  const end = siteBundle.indexOf(",Rl=", start);
-  if (start === -1 || end === -1) throw new Error("未找到解密模块");
+  const wasmFunction = findFunctionContaining(siteBundle, "WebAssembly");
+  const payloadMatch = wasmFunction.code.match(
+    /atob,\s*([A-Za-z_$][\w$]*)\)/,
+  );
+  if (!payloadMatch) throw new Error("未找到解密模块数据");
 
-  const expression = siteBundle
-    .slice(start, end)
-    .replace(/^const Pl=/, "")
-    .replace(/_0x540869\((0x[0-9a-f]+)\)/g, (_, hex) =>
-      JSON.stringify(bundleDecoder(Number(hex))),
+  const declaration = findDeclarationBefore(
+    siteBundle,
+    payloadMatch[1],
+    wasmFunction.start,
+  );
+  const end = findExpressionEnd(siteBundle, declaration.valueStart);
+  if (end === -1) throw new Error("解密模块数据不完整");
+
+  let expression = siteBundle.slice(declaration.valueStart, end);
+  for (const name of bundleDecoder.names) {
+    expression = expression.replace(
+      new RegExp(`${escapeRegExp(name)}\\((0x[0-9a-f]+)\\)`, "gi"),
+      (_, hex) => JSON.stringify(bundleDecoder.decode(Number(hex))),
     );
+  }
 
   return new Function(`return ${expression};`)();
 }
 
 function extractBundleDecoder(siteBundle) {
-  const arrStart = siteBundle.indexOf("function _0x13e3()");
-  const arrEnd = siteBundle.indexOf("return _0x13e3();}", arrStart);
-  const decStart = siteBundle.indexOf("function _0x3151", arrEnd);
-  const decEnd = siteBundle.indexOf("_0x31512d;}", decStart);
-  const rotStart = siteBundle.indexOf("(function(_0xfd5efe,_0x5769b1)");
-  const rotEnd = siteBundle.indexOf(",(function(){", rotStart);
+  const bootstrap = siteBundle.match(
+    /^\s*const\s+(_0x[0-9a-f]+)\s*=\s*(_0x[0-9a-f]+);\s*(?=\(function)/i,
+  );
+  if (!bootstrap) throw new Error("未找到 bundle 解码器入口");
 
-  if (
-    [arrStart, arrEnd, decStart, decEnd, rotStart, rotEnd].some(
-      (value) => value === -1,
-    )
-  ) {
-    throw new Error("未找到 bundle 解码器");
+  const [, aliasName, decoderName] = bootstrap;
+  const rotStart = siteBundle.indexOf("(function", bootstrap.index);
+  const rotEnd = siteBundle.indexOf(",(function(){", rotStart);
+  if (rotStart === -1 || rotEnd === -1) {
+    throw new Error("未找到 bundle 字符串表初始化器");
   }
 
-  const arrCode = siteBundle.slice(
-    arrStart,
-    arrEnd + "return _0x13e3();}".length,
+  const rotationCode = siteBundle.slice(rotStart, rotEnd);
+  const arrayMatch = rotationCode.match(
+    /\}\((_0x[0-9a-f]+),\s*0x[0-9a-f]+\)$/i,
   );
-  const decCode = siteBundle.slice(
-    decStart,
-    decEnd + "_0x31512d;}".length,
-  );
-  const rotCode = `${siteBundle.slice(rotStart, rotEnd)})`;
+  if (!arrayMatch) throw new Error("未找到 bundle 字符串表");
 
-  return new Function(
-    `${arrCode}\n${decCode}\n${rotCode}\nreturn _0x3151;`,
+  const arrayCode = extractFunction(siteBundle, arrayMatch[1]).code;
+  const decoderCode = extractFunction(siteBundle, decoderName).code;
+  const decode = new Function(
+    `${arrayCode}\n${decoderCode}\n${rotationCode});\nreturn ${decoderName};`,
   )();
+
+  return {
+    decode,
+    names: [...new Set([aliasName, decoderName])],
+  };
+}
+
+function findFunctionContaining(source, needle) {
+  const matcher = /(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g;
+  let match;
+
+  while ((match = matcher.exec(source))) {
+    const found = extractFunction(source, match[1], match.index);
+    if (found.code.includes(needle)) return found;
+    matcher.lastIndex = found.end;
+  }
+
+  throw new Error(`未找到包含 ${needle} 的函数`);
+}
+
+function extractFunction(source, name, fromIndex = 0) {
+  const start = source.indexOf(`function ${name}`, fromIndex);
+  if (start === -1) throw new Error(`未找到函数 ${name}`);
+
+  const bodyStart = source.indexOf("{", start);
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === "{") depth += 1;
+    if (char === "}" && --depth === 0) {
+      return {
+        start,
+        end: index + 1,
+        code: source.slice(start, index + 1),
+      };
+    }
+  }
+
+  throw new Error(`函数 ${name} 不完整`);
+}
+
+function findDeclarationBefore(source, name, beforeIndex) {
+  const prefixes = ["const", "let", "var"];
+  let start = -1;
+  let prefix = "";
+
+  for (const candidate of prefixes) {
+    const found = source.lastIndexOf(`${candidate} ${name}=`, beforeIndex);
+    if (found > start) {
+      start = found;
+      prefix = `${candidate} ${name}=`;
+    }
+  }
+
+  if (start === -1) throw new Error(`未找到 ${name} 的声明`);
+  return { valueStart: start + prefix.length };
+}
+
+function findExpressionEnd(source, start) {
+  let depth = 0;
+  let quote = "";
+  let escaped = false;
+
+  for (let index = start; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if ("([{".includes(char)) depth += 1;
+    else if (")]}".includes(char)) depth -= 1;
+    else if (depth === 0 && (char === "," || char === ";")) return index;
+  }
+
+  return -1;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function detectSession(timestamp = "") {
